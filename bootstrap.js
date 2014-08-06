@@ -19,12 +19,32 @@ var warnAgainstPotentiallyOverwrittenValues = false;
 var allW3CSSProperties = ["align-content","align-items","align-self","alignment-adjust","alignment-baseline","all","anchor-point","animation","animation-delay","animation-direction","animation-duration","animation-fill-mode","animation-iteration-count","animation-name","animation-play-state","animation-timing-function","appearance","azimuth","backface-visibility","background","background-attachment","background-clip","background-color","background-image","background-origin","background-position","background-repeat","background-size","baseline-shift","binding","bleed","bookmark-label","bookmark-level","bookmark-state","bookmark-target","border","border-bottom","border-bottom-color","border-bottom-left-radius","border-bottom-right-radius","border-bottom-style","border-bottom-width","border-collapse","border-color","border-image","border-image-outset","border-image-repeat","border-image-slice","border-image-source","border-image-width","border-left","border-left-color","border-left-style","border-left-width","border-radius","border-right","border-right-color","border-right-style","border-right-width","border-spacing","border-style","border-top","border-top-color","border-top-left-radius","border-top-right-radius","border-top-style","border-top-width","border-width","bottom","box-decoration-break","box-shadow","box-sizing","break-after","break-before","break-inside","caption-side","chains","clear","clip","clip-path","clip-rule","color","color-interpolation-filters","color-profile","column-count","column-fill","column-gap","column-rule","column-rule-color","column-rule-style","column-rule-width","column-span","column-width","columns","contain","content","counter-increment","counter-reset","crop","cue","cue-after","cue-before","cursor","direction","display","dominant-baseline","drop-initial-after-adjust","drop-initial-after-align","drop-initial-before-adjust","drop-initial-before-align","drop-initial-size","drop-initial-value","elevation","empty-cells","filter","flex","flex-basis","flex-direction","flex-flow","flex-grow","flex-shrink","flex-wrap","float","float-offset","flood-color","flood-opacity","flow-from","flow-into","font","font-family","font-feature-settings","font-kerning","font-language-override","font-size","font-size-adjust","font-stretch","font-style","font-synthesis","font-variant","font-variant-alternates","font-variant-caps","font-variant-east-asian","font-variant-ligatures","font-variant-numeric","font-variant-position","font-weight","grid","grid-area","grid-auto-columns","grid-auto-flow","grid-auto-position","grid-auto-rows","grid-column","grid-column-end","grid-column-start","grid-row","grid-row-end","grid-row-start","grid-template","grid-template-areas","grid-template-columns","grid-template-rows","hanging-punctuation","height","hyphens","icon","image-orientation","image-resolution","ime-mode","inline-box-align","justify-content","justify-items","justify-self","left","letter-spacing","lighting-color","line-break","line-height","line-stacking","line-stacking-ruby","line-stacking-shift","line-stacking-strategy","list-style","list-style-image","list-style-position","list-style-type","margin","margin-bottom","margin-left","margin-right","margin-top","marker-offset","marks","mask","mask-box","mask-box-outset","mask-box-repeat","mask-box-slice","mask-box-source","mask-box-width","mask-clip","mask-image","mask-origin","mask-position","mask-repeat","mask-size","mask-source-type","mask-type","max-height","max-lines","max-width","min-height","min-width","move-to","nav-down","nav-index","nav-left","nav-right","nav-up","object-fit","object-position","opacity","order","orphans","outline","outline-color","outline-offset","outline-style","outline-width","overflow","overflow-wrap","overflow-x","overflow-y","padding","padding-bottom","padding-left","padding-right","padding-top","page","page-break-after","page-break-before","page-break-inside","page-policy","pause","pause-after","pause-before","perspective","perspective-origin","pitch","pitch-range","play-during","position","presentation-level","quotes","region-fragment","rendering-intent","resize","rest","rest-after","rest-before","richness","right","rotation","rotation-point","ruby-align","ruby-overhang","ruby-position","ruby-span","shape-image-threshold","shape-outside","shape-margin","size","speak","speak-as","speak-header","speak-numeral","speak-punctuation","speech-rate","stress","string-set","tab-size","table-layout","target","target-name","target-new","target-position","text-align","text-align-last","text-combine-horizontal","text-decoration","text-decoration-color","text-decoration-line","text-decoration-skip","text-decoration-style","text-emphasis","text-emphasis-color","text-emphasis-position","text-emphasis-style","text-height","text-indent","text-justify","text-orientation","text-outline","text-overflow","text-shadow","text-space-collapse","text-transform","text-underline-position","text-wrap","top","transform","transform-origin","transform-style","transition","transition-delay","transition-duration","transition-property","transition-timing-function","unicode-bidi","vertical-align","visibility","voice-balance","voice-duration","voice-family","voice-pitch","voice-range","voice-rate","voice-stress","voice-volume","volume","white-space","widows","width","word-break","word-spacing","word-wrap","wrap-flow","wrap-through","writing-mode","z-index"];
 
 function doTheBigStyleFixing(window){
-    if(window.content && window.toString.call(window.content) === '[object Window]'){
-      window = window.content;
-    }
+    try{
+        if(window.content && window.toString.call(window.content) === '[object Window]'){
+          window = window.content;
+        }
+    }catch(e){}
+    if(window.wrappedJSObject)window = window.wrappedJSObject;
     doc = window.document;
-    console.log(window);
-    console.log(doc);
+    console.log('window is '+window);
+    console.log('doc is '+doc);
+
+    // mutation observation..? Let's try a quick'n'dirty hack to see..
+    try{
+        var mutobs = new window.MutationObserver(function(mutations){
+            mutations.forEach(function(mutation){
+                if(mutation.target.tagName === 'style' || (mutation.target.parentNode && mutation.target.parentNode.tagName === 'STYLE')){
+                    //var rules = createFixupRulesFromCSS(stripHTMLComments(target.textContent));
+                    console.log('mutation! style! text! '+mutation.target);
+                    if(fixedElms.indexOf(mutation.target.parentNode)>-1)return;
+                    doTheBigStyleFixing(doc.defaultView);
+                    fixedElms.push(mutation.target.parentNode);
+                }
+            });
+        });
+        mutobs.observe(doc, {subtree:true, attributes: false, childList: true});
+    }catch(e){console.log('MutationObserver error: '+e);}
+
     //console.log('GM CSS fixed running '+doc.styleSheets.length);
     for(var el, i = doc.styleSheets.length - 1; i>=0; i--){
         el = doc.styleSheets[i];
@@ -48,9 +68,10 @@ function doTheBigStyleFixing(window){
           request.open("GET", el.href, true);
           request.setRequestHeader("Accept", "text/css");
           fixedElms.push(el.href);
-          request.onload = function(response){
+          request.onload = function(event){
               var fixupStyle = {"type": "stylesheet", stylesheet: {rules: []}};
-              var rules = createFixupRulesFromCSS(response.responseText);
+              var rules = createFixupRulesFromCSS(event.target.responseText);
+              if(!rules) return;
               copyJSDefinedStyles(rules, fixupStyle);
               var cssStr = css.stringify(fixupStyle);
               if(cssStr !== ''){
@@ -129,10 +150,14 @@ function createFixupRulesFromCSS(str){
                         if(existingValue !== undefined && !/(-webkit-|box)/.test(existingValue)){ // now it gets complicated. There is a declaration for the property we want to add, but the value is different..
                             // console.log('Whoa, Sir! We want to add "' + prop + ':' + value +'", but found "' + prop + ':' + existingValue +'"');
 
-                        }                       
+                        }
                     }
                     fixupDeclarations.push({type:'declaration', property:prop, value:value, _fxjsdefined:true});
-                    // extra gotcha: per Gecko's reading of the spec, border-image will only appear if border-style or border-width is set..
+                    if(prop === 'border-image' && decl.property === '-webkit-border-image'){
+                        // Gotcha: -webkit-border-image defaults to 'fill' on, spec defaults to 'fill' off..
+                        fixupDeclarations[fixupDeclarations.length-1].value += ' fill';
+                    }
+                    // extra gotcha: per the spec, border-image will only appear if border-style or border-width is set..
                     if(prop === 'border-image' && getValueForProperty(fixupDeclarations.concat(rule.declarations), 'border-style', false) === undefined){
                         fixupDeclarations.push({type:'declaration', property:'border-style', value:'solid', _fxjsdefined:true});
                     }
@@ -159,7 +184,7 @@ function createFixupFlexboxDeclaration(decl, parent){
     if(/^-webkit-/.test(value)){
         value = value.substr(8);
     }
-    
+
     var mappings = {
         'display':{
             valueMap: {
@@ -170,7 +195,7 @@ function createFixupFlexboxDeclaration(decl, parent){
             }
         },
         'box-align':{
-            newName: 'align-items', 
+            newName: 'align-items',
             valueMap:{
                 'start': 'flex-start',
                 'end': 'flex-end'
@@ -182,7 +207,7 @@ function createFixupFlexboxDeclaration(decl, parent){
                 'rl': 'row-reverse',
                 'tb': 'column',
                 'bt': 'column-reverse'
-            }  
+            }
         },
         'box-pack':{
             newName:'justify-content',
@@ -191,20 +216,20 @@ function createFixupFlexboxDeclaration(decl, parent){
                     'end': 'flex-end',
                    'justify': 'space-between'
                 }
-         }, 
+         },
         'box-ordinal-group':{
             newName:'order',
             valueMap:{}
-        }, 
+        },
         'box-flex':{
             newName:'flex',
             valueMap:{}
         }
     };
-    
+
     mappings['flex-align'] = mappings['box-align']; // 2009 => 2011
     mappings['flex-order'] = mappings['box-ordinal-group']; // 2009 => 2011
-    
+
     if(propname in mappings){
         if(value in mappings[propname].valueMap){
            value = mappings[propname].valueMap[value];
@@ -238,8 +263,8 @@ function createFixupFlexboxDeclaration(decl, parent){
         }
         propname = 'flex-direction';
     }
-    
-    
+
+
     return {type:'declaration', property:propname, value:value, _fxjsdefined:true};
 }
 
@@ -353,7 +378,7 @@ function hasDeclaration(declarations, property, value, prefixAgnostic, checkFunc
 }
 
 function oldGradientParser(str){
-    /** This method takes a legacy -webkit-gradient() method call and parses it 
+    /** This method takes a legacy -webkit-gradient() method call and parses it
         to pull out the values, function names and their arguments.
         It returns something like [{name:'-webkit-gradient',args:[{name:'linear'}, {name:'top left'} ... ]}]
     */
@@ -425,7 +450,7 @@ function copyJSDefinedStyles(sheet1, sheet2){
         if('declarations' in rule){
             for(var i = 0, decl; decl = rule.declarations[i]; i++){
                 if(decl._fxjsdefined)returnObj.declarations.push(decl);
-            }  
+            }
         }
         if('rules' in rule){
             for(var i = 0, subrule; subrule = rule.rules[i]; i++){
@@ -433,7 +458,7 @@ function copyJSDefinedStyles(sheet1, sheet2){
                 if(subclone.rules && subclone.rules.length || subclone.declarations && subclone.declarations.length){
                     returnObj.rules.push(subclone);
                 }
-            }  
+            }
         }
         return returnObj;
     }
@@ -456,9 +481,11 @@ function unloadFromWindow(window) {
   // TODO: keep a per-window list of inserted <style> elements and remove them?
 }
 
-function onLoad() {
+function onLoad(evt) {
       //domWindow.removeEventListener("load", onLoad, false);
-      console.log('load event for '+domWindow);
+
+      let domWindow = evt.target.defaultView ? evt.target.defaultView : evt.target;
+      console.log('load event for '+domWindow +' '+evt.target);
       loadIntoWindow(domWindow);
     }
 
@@ -466,14 +493,14 @@ var windowListener = {
   onOpenWindow: function(aWindow) {
     // Wait for the window to finish loading
     let domWindow = aWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowInternal || Ci.nsIDOMWindow);
-    domWindow.addEventListener("load", onLoad, false);
+    domWindow.addEventListener("load", onLoad, true);
   },
- 
+
   onCloseWindow: function(aWindow) {},
   onWindowTitleChange: function(aWindow, aTitle) {}
 };
 
-function startup(aData, aReason) { console.log('startup '+aReason)
+function startup(aData, aReason) { console.log('startup cssfixer bootstrap.js '+aReason);
   let wm = Cc["@mozilla.org/appshell/window-mediator;1"].getService(Ci.nsIWindowMediator);
   let resource = Services.io.getProtocolHandler("resource").QueryInterface(Ci.nsIResProtocolHandler); // http://starkravingfinkle.org/blog/2011/01/restartless-add-ons-more-resources/
   let alias = Services.io.newFileURI(aData.installPath); // same source as above
@@ -487,8 +514,43 @@ function startup(aData, aReason) { console.log('startup '+aReason)
   let windows = wm.getEnumerator("navigator:browser");
   while (windows.hasMoreElements()) {
     let domWindow = windows.getNext().QueryInterface(Ci.nsIDOMWindow);
-    loadIntoWindow(domWindow);
-    domWindow.addEventListener("load", onLoad, false);
+    if(domWindow.gBrowser){
+        if(domWindow.gBrowser.tabs){
+            for(var tabs = domWindow.gBrowser.tabs, tab, i=0; tab=tabs[i]; i++){
+                console.log(i+' '+tab+' '+tab.linkedBrowser.contentWindow);
+                if(tab.linkedBrowser.contentWindow){
+                    loadIntoWindow(tab.linkedBrowser.contentWindow);
+                }
+            }
+        }
+        // add a capturing event listener to make sure we fix the CSS in any new sites loading inside these tabs..
+        domWindow.gBrowser.addEventListener("DOMContentLoaded", onLoad, true);
+        // Some things need to happen as early as possible
+        // Ideally we'd like a "scriptEnvironmentReady" event for this
+        domWindow.gBrowser.addEventListener("DOMWindowCreated", function(evt){ console.log('DOMWindowCreated events happen');
+            let window = evt.target.defaultView ? evt.target.defaultView : evt.target;
+            if(window.wrappedJSObject)window = window.wrappedJSObject;
+            console.log(window);
+            // Handle style.webkit*
+            var setters = [
+                    {name: "webkitTransform", stdName: "transform"},
+                    {name: "webkitTransition", stdName: "transition"},
+                    {name: "WebkitBoxFlex", stdName:"flex"},
+                    {name: "webkitBoxFlex", stdName:"flex"}
+            ];
+            for(var i=0; i<setters.length; i++){
+                window.CSS2Properties.prototype.__defineSetter__(setters[i].name, (function(stdName){return function(value){this[stdName]=value.replace(/-webkit-/, '');console.log('SETTER now set '+stdName+' to '+value)}})(setters[i].stdName));
+                window.CSS2Properties.prototype.__defineGetter__(setters[i].name, (function(stdName){return function(){return this[stdName];}})(setters[i].stdName));
+            };
+/*            window.CSS2Properties.prototype.__defineSetter__('left', function(value){
+                console.log('left set to '+value);
+                try{undefined();}catch(e){
+                    console.log(e.stack);
+                }
+            }); */
+        }, true);
+    }
+    //loadIntoWindow(domWindow);
   }
 
   // Load into any new windows
