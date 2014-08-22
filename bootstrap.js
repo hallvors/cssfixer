@@ -285,15 +285,23 @@ function createFixupGradientDeclaration(decl, parent){
             if(type === 'linear'){
                 // linear gradient, args 1 and 2 tend to be start/end keywords
                 points = [].concat(parts[i].args[1].name.split(/\s+/), parts[i].args[2].name.split(/\s+/)); // example: [left, top, right, top]
-                if(points[1] === points[3]){ // both 'top' or 'bottom, this linear gradient goes left-right
-                    newValue += 'to ' + points[2];
-                }else if(points[0] === points[2]){ // both 'left' or 'right', this linear gradient goes top-bottom
-                    newValue += 'to ' + points[3];
-                }else if(points[1] === 'top'){ // diagonal gradient - from top left to opposite corner is 135deg
-                    newValue += '135deg';
-                }else{
-                    newValue += '45deg';
-                }
+		// Old webkit syntax "uses a two-point syntax that lets you explicitly state where a linear gradient starts and ends"
+		// if start/end keywords are percentages, let's massage the values a little more..
+		var rxPercTest = /\d+\%/;
+		if(rxPercTest.test(points[0])){
+			var startX = parseInt(points[0]), startY = parseInt(points[1]), endX = parseInt(points[2]), endY = parseInt(points[3]);
+			newValue +=  ((Math.atan2(endY- startY, endX - startX)) * (180 / Math.PI)+90) + 'deg';
+		}else{
+			if(points[1] === points[3]){ // both 'top' or 'bottom, this linear gradient goes left-right
+			    newValue += 'to ' + points[2];
+			}else if(points[0] === points[2]){ // both 'left' or 'right', this linear gradient goes top-bottom
+			    newValue += 'to ' + points[3];
+			}else if(points[1] === 'top'){ // diagonal gradient - from top left to opposite corner is 135deg
+			    newValue += '135deg';
+			}else{
+			    newValue += '45deg';
+			}
+		}
             }else{ // oooh, radial gradients..
                 newValue += 'circle ' + parts[i].args[4].name.replace(/(\d+)$/, '$1px') + ' at ' + parts[i].args[1].name.replace(/(\d+) /, '$1px ').replace(/(\d+)$/, '$1px');
             }
